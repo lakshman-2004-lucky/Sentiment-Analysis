@@ -1,47 +1,41 @@
 import streamlit as st
-import pickle
-import numpy as np
+from google_drive_downloader import GoogleDriveDownloader as gdd
 import tensorflow as tf
-from tensorflow.keras.models import load_model
-pip install googledrivedownloader
-from tensorflow.keras.preprocessing.sequence import pad_sequences
+import pickle
+import os
 
-# Load saved model
-@st.cache_resource
-def load_sentiment_model():
-    return load_model("bi_lstm_model.keras")
+# Download the model from Google Drive
+file_id = "1O2NSkwqNVOAKYJFT3lc0cduP8Enp5uYn"  # Replace with your actual Google Drive file ID
+model_path = "./bi_lstm_model.keras"
 
-# Load tokenizer
-@st.cache_resource
-def load_tokenizer():
-    with open("tokenizer.pkl", "rb") as handle:
-        return pickle.load(handle)
+if not os.path.exists(model_path):  # Download only if not present
+    st.write("Downloading model... Please wait.")
+    gdd.download_file_from_google_drive(file_id=file_id, dest_path=model_path, unzip=False)
 
-# Load model and tokenizer
-model = load_sentiment_model()
-tokenizer = load_tokenizer()
+# Load the trained model
+st.write("Loading the model...")
+model = tf.keras.models.load_model(model_path)
+st.write("Model loaded successfully!")
 
-# Define max sequence length (same as during training)
-MAX_LEN = 100  # Change this if different during training
+# Load the tokenizer
+tokenizer_path = "./tokenizer.pkl"
+with open(tokenizer_path, "rb") as f:
+    tokenizer = pickle.load(f)
 
-# Function to preprocess and predict sentiment
-def predict_sentiment(text):
-    sequence = tokenizer.texts_to_sequences([text])
-    padded_sequence = pad_sequences(sequence, maxlen=MAX_LEN, padding="post")
-    prediction = model.predict(padded_sequence)
-    sentiment_class = np.argmax(prediction)
-
-    sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
-    return sentiment_mapping[sentiment_class]
+# Function to preprocess text
+def preprocess_text(text):
+    seq = tokenizer.texts_to_sequences([text])
+    return tf.keras.preprocessing.sequence.pad_sequences(seq, maxlen=100)  # Adjust maxlen as per training
 
 # Streamlit UI
-st.title("Sentiment Analysis with Bi-LSTM")
-st.write("Enter a text below to predict its sentiment:")
+st.title("Sentiment Analysis with BiLSTM")
 
-user_input = st.text_area("Enter text here:")
-if st.button("Predict Sentiment"):
-    if user_input:
-        sentiment = predict_sentiment(user_input)
-        st.write(f"**Predicted Sentiment:** {sentiment}")
+user_input = st.text_area("Enter your text:")
+if st.button("Predict"):
+    if user_input.strip():
+        processed_input = preprocess_text(user_input)
+        prediction = model.predict(processed_input)
+        sentiment = ["Negative", "Neutral", "Positive"]
+        st.write(f"Prediction: {sentiment[prediction.argmax()]}")
     else:
-        st.write("⚠️ Please enter some text before predicting.")
+        st.write("Please enter some text.")
